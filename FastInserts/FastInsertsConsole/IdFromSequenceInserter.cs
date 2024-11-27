@@ -1,4 +1,4 @@
-﻿using System.Data.SqlClient;
+﻿using Microsoft.Data.SqlClient;
 
 namespace FastInsertsConsole;
 
@@ -20,27 +20,31 @@ internal class IdFromSequenceInserter : IInserter
     {
         await EnsureConnectionOpenedAsync();
 
-        await using var dropCommand = _sqlConnection.CreateCommand();
-        dropCommand.CommandText = """
-            DROP TABLE IF EXISTS [dbo].[TestAutoIncrement]
-            DROP SEQUENCE IF EXISTS [dbo].[TestSequence]
-            """;
-        await dropCommand.ExecuteNonQueryAsync();
+        //await using var dropCommand = _sqlConnection.CreateCommand();
+        //dropCommand.CommandText = """
+        //    DROP TABLE IF EXISTS [dbo].[TestAutoIncrement]
+        //    DROP SEQUENCE IF EXISTS [dbo].[TestSequence]
+        //    """;
+        //await dropCommand.ExecuteNonQueryAsync();
 
         await using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
+            if not exists (select * from sys.sequences where name = N'TestSequence' and schema_id = schema_id(N'dbo'))
+            begin
             CREATE SEQUENCE [dbo].[TestSequence] 
                 AS [bigint]
                 START WITH -9223372036854775808
                 INCREMENT BY 1
                 MINVALUE -9223372036854775808
                 MAXVALUE 9223372036854775807
-                CACHE 
+                CACHE;
+            end
 
-            CREATE TABLE [dbo].[TestAutoIncrement](
+            if object_id('dbo.TestAutoIncrementSeq') is null
+            create table [dbo].[TestAutoIncrementSeq](
             	[Id] [bigint]  NOT NULL,
             	[SomeData] [nvarchar](100) NOT NULL,
-            	CONSTRAINT [PK_TestAutoIncrement] PRIMARY KEY CLUSTERED ([Id] ASC)
+            	constraint [PK_TestAutoIncrementSeq] primary key clustered ([Id] ASC)
             )
             """;
         await createCommand.ExecuteNonQueryAsync();
@@ -52,7 +56,7 @@ internal class IdFromSequenceInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "INSERT INTO [dbo].[TestAutoIncrement] (Id, [SomeData]) VALUES (@Id, @SomeData)";
+            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementSeq] (Id, [SomeData]) VALUES (@Id, @SomeData)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@Id", System.Data.SqlDbType.BigInt));
             _insertCommand.CommandTimeout = 300;

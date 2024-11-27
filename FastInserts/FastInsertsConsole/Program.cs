@@ -1,7 +1,9 @@
 ﻿using FastInsertsConsole;
 
-int targetInsertCount = 2_000_000;
-string connectionString = "Server=localhost;Database=ForTests;Trusted_Connection=True;Max Pool Size=200;";
+int targetInsertCount = 1_000_00;//2_000_000;
+string connectionString = "Server=localhost;Database=ForTests;Trusted_Connection=True;Encrypt=False;TrustServerCertificate=True; Max Pool Size=200;";
+// фикскируем время старта, используется для группировки в таблицах
+Helpers.GetTimeMsSinceMidnight();
 
 var settings = AskForSettings(connectionString);
 if (!settings.HasValue)
@@ -22,9 +24,11 @@ var remainingCounter = new RemainingCounter(targetInsertCount);
 for (int i = 0; i < settings.Value.WorkerCount; i++)
     workers.Add(InsertAsync(settings.Value.Inserter, remainingCounter));
 
-while (remainingCounter.Remaining > 0)
+while (remainingCounter.Remaining > 0 )
 {
-    Console.WriteLine($"{DateTime.UtcNow:dd.MM.yyyy HH:mm:ss} Inserted: {targetInsertCount - remainingCounter.Remaining}, per thread: {(int)(targetInsertCount / (DateTime.UtcNow - startedAt).TotalSeconds / settings.Value.WorkerCount)}");
+    // исключаем первые 15000 обработанных данных
+    if(remainingCounter.Remaining < targetInsertCount - 15000)
+        Console.WriteLine($"{DateTime.UtcNow:dd.MM.yyyy HH:mm:ss} Inserted: {targetInsertCount - remainingCounter.Remaining}, per thread: {(int)(targetInsertCount / (DateTime.UtcNow - startedAt).TotalSeconds / settings.Value.WorkerCount)}");
     await Task.Delay(1000);
 }
 
@@ -63,11 +67,17 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
     Select inserter and thread count([1,256]), ex. "B 256":
         - B - autoicnremented id
         - O - autoicnremented id + optimize for sequential identity
-        - G - guid as id
+        - G - guid as id on client
+        - G7 - guid as id on client using Guid.CreateVersion7
+        - G2 - guid as id on server newid()
+        - G3 - guid as id on server newsequentialid()
         - S - id from sequence
+        - M - inmemory table id from sequence
+        - M1 - inmemory table id from sequence use stored procedure
+        - V - inmemory table id from sequence use view
     """);
 
-    var inputParts = (Console.ReadLine() ?? string.Empty).Split(' ');
+    var inputParts = (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
     if (inputParts.Length != 2 || !int.TryParse(inputParts[1], out var workerCount) || workerCount <= 0 || workerCount > 256)
         return null;
 
@@ -76,7 +86,13 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
         "B" => () => new BasicInserter(connectionString),
         "O" => () => new OptimizeForSequentialIdInserter(connectionString),
         "G" => () => new GuidIdInserter(connectionString),
+        "G7" => () => new GuidIdInserterV7OnClient(connectionString),
+        "G2" => () => new GuidIdInserterNewIdOnServer(connectionString),
+        "G3" => () => new GuidIdInserterNewSequentialidOnServer(connectionString),
         "S" => () => new IdFromSequenceInserter(connectionString),
+        "M" => () => new InMemoryTableInserter(connectionString),
+        "M1" => () => new InMemoryTableInserterNativesp(connectionString),
+        "V" => () => new InMemoryViewInserter(connectionString),
         _ => null
     };
     if (creator == null)
