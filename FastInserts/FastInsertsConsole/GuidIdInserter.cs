@@ -43,7 +43,7 @@ internal class GuidIdInserter : IInserter
             _insertCommand.CommandTimeout = 300;
         }
 
-        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 100);
+        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70);
         _insertCommand.Parameters["@Id"].Value = Guid.NewGuid();
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         await _insertCommand.ExecuteNonQueryAsync();

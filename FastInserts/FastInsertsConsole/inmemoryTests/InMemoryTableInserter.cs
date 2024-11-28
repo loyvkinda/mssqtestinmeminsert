@@ -49,9 +49,7 @@ internal class InMemoryTableInserter: IInserter
             reader.Close();
             string basedir = System.IO.Path.GetDirectoryName(resFilePath);
             string inmemDir = System.IO.Path.Combine(basedir, $"{resFileName}Inmem");
-            //if (!System.IO.Path.Exists(inmemDir))
-            //    System.IO.Directory.CreateDirectory(inmemDir); 
-            //
+            
             using var cmdCreateFileGroup = _sqlConnection.CreateCommand();
             cmdCreateFileGroup.CommandText = $"alter database [{resDbName}] add filegroup [inmemdata] contains memory_optimized_data;";
             cmdCreateFileGroup.ExecuteNonQuery();
@@ -83,8 +81,10 @@ internal class InMemoryTableInserter: IInserter
             if object_id('dbo.TestAutoIncrementInMem') is null
             CREATE TABLE dbo.TestAutoIncrementInMem
             (
-            	Id bigint NOT NULL, 
-            	SomeData nvarchar(100)
+            Id bigint NOT NULL, 
+            SomeData nvarchar(100),
+            AppKey int not null,
+            CreateAt datetime2 not null default(getutcdate()),
                --CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY NONCLUSTERED (Id),
                 CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY nonclustered hash (id) with(bucket_count=1024)
                
@@ -100,14 +100,16 @@ internal class InMemoryTableInserter: IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementInMem] (Id, [SomeData]) VALUES (@Id, @SomeData)";
+            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementInMem] (Id, SomeData, AppKey) VALUES (@Id, @SomeData, @AppKey)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@Id", System.Data.SqlDbType.BigInt));
+            _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
         _insertCommand.Parameters["@Id"].Value = await GetNextIdAsync();
-        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 100);
+        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "siqencecode ");
+        _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         await _insertCommand.ExecuteNonQueryAsync();
     }
 
@@ -129,7 +131,7 @@ DECLARE @range_first_value_output sql_variant  ;
 EXEC sys.sp_sequence_get_range  
 @sequence_name = N'dbo.TestSequenceInMem'  
 , @range_size = {_rangeSize}  
-, @range_first_value = @range_first_value_output OUTPUT ;  
+, @range_first_value = @range_first_value_output OUTPUT;  
  
 SELECT CONVERT(bigint, @range_first_value_output) AS FirstNumber; ";
                 _commandNextIdValue.Connection = _sqlConnection;

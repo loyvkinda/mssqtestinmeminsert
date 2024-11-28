@@ -42,9 +42,11 @@ internal class IdFromSequenceInserter : IInserter
 
             if object_id('dbo.TestAutoIncrementSeq') is null
             create table [dbo].[TestAutoIncrementSeq](
-            	[Id] [bigint]  NOT NULL,
-            	[SomeData] [nvarchar](100) NOT NULL,
-            	constraint [PK_TestAutoIncrementSeq] primary key clustered ([Id] ASC)
+            [Id] [bigint]  NOT NULL,
+            [SomeData] [nvarchar](100) NOT NULL,
+            AppKey int not null,
+            CreateAt datetime2 not null default(getutcdate()),
+            constraint [PK_TestAutoIncrementSeq] primary key clustered ([Id] ASC)
             )
             """;
         await createCommand.ExecuteNonQueryAsync();
@@ -56,14 +58,16 @@ internal class IdFromSequenceInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementSeq] (Id, [SomeData]) VALUES (@Id, @SomeData)";
+            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementSeq] (Id, SomeData, AppKey) VALUES (@Id, @SomeData, @AppKey)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@Id", System.Data.SqlDbType.BigInt));
+            _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
         _insertCommand.Parameters["@Id"].Value = await GetNextIdAsync();
-        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 100);
+        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70);
+        _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         await _insertCommand.ExecuteNonQueryAsync();
     }
 

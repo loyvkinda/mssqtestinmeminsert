@@ -74,7 +74,9 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
         - S - id from sequence
         - M - inmemory table id from sequence
         - M1 - inmemory table id from sequence use stored procedure
-        - V - inmemory table id from sequence use view
+        - MV - inmemory table id from sequence use view
+        - MI - inmemory table (with identity) direct insert
+        - MI2 - inmemory table (with identity) insert use stored procedure
     """);
 
     var inputParts = (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
@@ -92,7 +94,9 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
         "S" => () => new IdFromSequenceInserter(connectionString),
         "M" => () => new InMemoryTableInserter(connectionString),
         "M1" => () => new InMemoryTableInserterNativesp(connectionString),
-        "V" => () => new InMemoryViewInserter(connectionString),
+        "MV" => () => new InMemoryViewInserter(connectionString),
+        "MI" => () => new InMemoryTableInserterIdentity(connectionString),
+        "MI2" => () => new InMemoryTableInserterIdentityNativeSp(connectionString),
         _ => null
     };
     if (creator == null)

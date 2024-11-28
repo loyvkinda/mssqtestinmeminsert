@@ -27,7 +27,7 @@ internal class BasicInserter : IInserter
             Id bigint identity(1, 1) not null,
             SomeData nvarchar(100) not null,
             AppKey int not null,
-            CreateAt datetime2 not null default(getutcdate())
+            CreateAt datetime2 not null default(getutcdate()),
             constraint PK_TestAutoIncrementIdentity primary key clustered(Id asc));
             """;
         await createCommand.ExecuteNonQueryAsync();
@@ -46,7 +46,7 @@ internal class BasicInserter : IInserter
             _insertCommand.CommandTimeout = 300;
         }
 
-        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 100);
+        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70);
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
 
         await _insertCommand.ExecuteNonQueryAsync();

@@ -92,7 +92,7 @@ internal class InMemoryViewInserter : IInserter
             exec dbo.sp_executesql @statement = N'create view [dbo].[TestAutoIncrementMemView]
             with schemabinding
             as
-            select id, SomeData from dbo.TestAutoIncrementInMem with(snapshot);
+            select id, SomeData, AppKey, CreateAt from dbo.TestAutoIncrementInMem with(snapshot);
             '
             """;
         await createViewCommand.ExecuteNonQueryAsync();
@@ -105,8 +105,8 @@ internal class InMemoryViewInserter : IInserter
             instead of insert
             as
             set nocount on;
-            insert into dbo.TestAutoIncrementInMem with(snapshot) (id, SomeData)
-            select next value for dbo.TestSequenceInMem, SomeData from INSERTED;
+            insert into dbo.TestAutoIncrementInMem with(snapshot) (id, SomeData, AppKey)
+            select next value for dbo.TestSequenceInMem, SomeData, AppKey from INSERTED;
             ' 
             """;
         await createViewTrigCommand.ExecuteNonQueryAsync();
@@ -118,12 +118,14 @@ internal class InMemoryViewInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementMemView] ([SomeData]) VALUES (@SomeData)";
+            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementMemView] (SomeData, AppKey) VALUES (@SomeData, @AppKey)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
+            _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
-        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 100);
+        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "view ");
+        _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         await _insertCommand.ExecuteNonQueryAsync();
     }
 

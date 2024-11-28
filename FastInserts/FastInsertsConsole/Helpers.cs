@@ -7,10 +7,10 @@ internal class Helpers
 {
     private static string _chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-    public static string GenerateRandomString(int fromLength, int toLength)
+    public static string GenerateRandomString(int fromLength, int toLength, string prefix="")
     {
         // максимально исключаем случайность 
-        return _timeMsSinceMidnight.ToString() + " "+ Environment.CurrentManagedThreadId.ToString() + " static const value";
+        return prefix + Environment.CurrentManagedThreadId.ToString() + " static const value";
         var length = Random.Shared.Next(fromLength, toLength);
         var sb = new StringBuilder(length);
         for (int i = 0; i < length; i++)

@@ -3,19 +3,15 @@
 namespace FastInsertsConsole;
 
 /// <summary>
-/// Вставка данных в in-memory с использованием Sequence 
-/// на стороне приложения и использования native хранимой процедуры
+/// Вставка данных в in-memory с использованием identity 
+/// на стороне сервера и использования native хранимой процедуры
 /// </summary>
-internal class InMemoryTableInserterNativesp : IInserter
+internal class InMemoryTableInserterIdentityNativeSp : IInserter
 {
-    private const int _rangeSize = 2_000;
     private SqlConnection _sqlConnection;
     private SqlCommand? _insertCommand;
-    private SqlCommand? _commandNextIdValue;
-    private (long NextValue, long RemaningingCount)? _idSequence;
 
-
-    public InMemoryTableInserterNativesp(string connectionString)
+    public InMemoryTableInserterIdentityNativeSp(string connectionString)
     {
         _sqlConnection = new SqlConnection(connectionString);
     }
@@ -59,38 +55,17 @@ internal class InMemoryTableInserterNativesp : IInserter
             cmdCreateFileGroup.ExecuteNonQuery();
         }
 
-        //await using var dropCommand = _sqlConnection.CreateCommand();
-        //dropCommand.CommandText = """
-        //    drop view if exists dbo.TestAutoIncrementMemView;
-        //    drop table if exists [dbo].[TestAutoIncrementInMem];
-        //    drop sequence if exists [dbo].[TestSequenceInMem];
-        //    """;
-        //await dropCommand.ExecuteScalarAsync();
 
         await using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
-            if not exists (select * from sys.sequences where name = N'TestSequenceInMem' and schema_id = schema_id(N'dbo'))
-            begin
-            CREATE SEQUENCE [dbo].[TestSequenceInMem] 
-                AS [bigint]
-                START WITH -9223372036854775808
-                INCREMENT BY 1
-                MINVALUE -9223372036854775808
-                MAXVALUE 9223372036854775807
-                CACHE 2000
-            end
-
-            if object_id('dbo.TestAutoIncrementInMem') is null
-            CREATE TABLE dbo.TestAutoIncrementInMem
-            (
-            Id bigint NOT NULL, 
-            SomeData nvarchar(100),
+            if object_id('dbo.TestAutoIncrementInMemIdentity') is null
+            create table dbo.TestAutoIncrementInMemIdentity (
+            Id bigint not null identity(1, 1),
+            SomeData nvarchar(100) collate Cyrillic_General_CI_AS null,
             AppKey int not null,
-            CreateAt datetime2 not null default(getutcdate()),
-               --CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY NONCLUSTERED (Id),
-                CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY nonclustered hash (id) with(bucket_count=1024)
-               
-            ) WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_AND_DATA)
+            CreateAt datetime2(7) not null default(getutcdate()),
+            constraint PK_TestAutoIncrementInMemIdentity primary key nonclustered(Id asc))
+            with (memory_optimized=on, durability=schema_and_data);
             
             """;
         await createCommand.ExecuteNonQueryAsync();
@@ -102,16 +77,14 @@ internal class InMemoryTableInserterNativesp : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "dbo.nativeTestAutoIncrementInMemInsertOne";
+            _insertCommand.CommandText = "dbo.nativeTestAutoIncrementInMemIdentityInsertOne";
             _insertCommand.CommandType = System.Data.CommandType.StoredProcedure;
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
-            _insertCommand.Parameters.Add(new SqlParameter("@Id", System.Data.SqlDbType.BigInt));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
-        _insertCommand.Parameters["@Id"].Value = await GetNextIdAsync();
-        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "spsiqencecode ");
+        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "spidentity ");
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         await _insertCommand.ExecuteNonQueryAsync();
     }
@@ -121,37 +94,11 @@ internal class InMemoryTableInserterNativesp : IInserter
         _sqlConnection.Dispose();
     }
 
-    private async Task<long> GetNextIdAsync()
-    {
-        if (_idSequence == null || _idSequence.Value.RemaningingCount == 0)
-        {
-            if (_commandNextIdValue == null)
-            {
-                _commandNextIdValue = new SqlCommand();
-                _commandNextIdValue.CommandText = @$"
-DECLARE @range_first_value_output sql_variant  ;  
- 
-EXEC sys.sp_sequence_get_range  
-@sequence_name = N'dbo.TestSequenceInMem'  
-, @range_size = {_rangeSize}  
-, @range_first_value = @range_first_value_output OUTPUT ;  
- 
-SELECT CONVERT(bigint, @range_first_value_output) AS FirstNumber; ";
-                _commandNextIdValue.Connection = _sqlConnection;
-            }
-            _idSequence = ((long)(await _commandNextIdValue.ExecuteScalarAsync())!, _rangeSize);
-        }
-        var toReturn = _idSequence!.Value.NextValue;
-        _idSequence = (toReturn + 1, _idSequence.Value.RemaningingCount - 1);
-        return toReturn;
-    }
 
     private async Task EnsureConnectionOpenedAsync()
     {
         if (_sqlConnection.State != System.Data.ConnectionState.Open)
-        {
             await _sqlConnection.OpenAsync();
-        }
     }
 }
 
