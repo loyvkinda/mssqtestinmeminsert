@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.SqlClient;
+using System.Threading;
 
 namespace FastInsertsConsole;
 
@@ -6,10 +7,12 @@ internal class BasicInserter : IInserter
 {
     private SqlConnection _sqlConnection;
     private SqlCommand? _insertCommand;
+    private int _workerCount=0;
 
-    public BasicInserter(string connectionString)
+    public BasicInserter(string connectionString, int workerCount)
     {
         _sqlConnection = new SqlConnection(connectionString);
+        _workerCount = workerCount;
     }
 
     public async Task PrepareAsync()
@@ -27,6 +30,7 @@ internal class BasicInserter : IInserter
             Id bigint identity(1, 1) not null,
             SomeData nvarchar(100) not null,
             AppKey int not null,
+            ThreadId int not null,
             CreateAt datetime2 not null default(getutcdate()),
             constraint PK_TestAutoIncrementIdentity primary key clustered(Id asc));
             """;
@@ -39,15 +43,17 @@ internal class BasicInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementIdentity] ([SomeData], AppKey) VALUES (@SomeData, @AppKey)";
+            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementIdentity (SomeData, AppKey, ThreadId) VALUES (@SomeData, @AppKey, @ThreadId)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
-            
+            _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
         _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70);
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
+        _insertCommand.Parameters["@ThreadId"].Value = Environment.CurrentManagedThreadId;
+        
 
         await _insertCommand.ExecuteNonQueryAsync();
     }

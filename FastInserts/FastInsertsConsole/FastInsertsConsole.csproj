@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <Folder Include="doc\" />
-    <Folder Include="sql\" />
   </ItemGroup>
 
 </Project>

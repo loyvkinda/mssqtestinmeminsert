@@ -64,19 +64,19 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
 (int WorkerCount, Func<IInserter> Inserter)? AskForSettings(string connectionString)
 {
     Console.WriteLine("""
-    Select inserter and thread count([1,256]), ex. "B 256":
-        - B - autoicnremented id
-        - O - autoicnremented id + optimize for sequential identity
-        - G - guid as id on client
-        - G7 - guid as id on client using Guid.CreateVersion7
-        - G2 - guid as id on server newid()
-        - G3 - guid as id on server newsequentialid()
-        - S - id from sequence
-        - M - inmemory table id from sequence
-        - M1 - inmemory table id from sequence use stored procedure
-        - MV - inmemory table id from sequence use view
-        - MI - inmemory table (with identity) direct insert
-        - MI2 - inmemory table (with identity) insert use stored procedure
+    Выбираем inserter количество потоков (thread) ([1,256]), например: "I 8":
+        - I  - ид на основе Identity. Таблица dbo.TestAutoIncrementIdentity
+        - I2 - ид на основе Identity + опция optimize_for_sequential_key=on. Таблица dbo.TestAutoIncrementIdentityOpt
+        - G  - guid as id on client. Таблица dbo.TestAutoIncrementGuid
+        - G7 - guid сгенерированный на клиенте используя Guid.CreateVersion7. Таблица dbo.TestAutoIncrementGuidV7
+        - G2 - guid сгенерированный на сервере newid(). Таблица dbo.TestAutoIncrementGuidNewId
+        - G3 - guid сгенерированный на сервере newsequentialid(). Таблица dbo.TestAutoIncrementGuidNewSequentialid
+        - S  - использование sequence. Таблица dbo.TestAutoIncrementSeq
+        - M  - in-memory таблица id из sequence. Таблица dbo.TestAutoIncrementInMem
+        - M1 - in-memory таблица id из sequence использую native хранимую процедуру. Таблица dbo.TestAutoIncrementInMem
+        - MV - in-memory таблица id из sequence втавка в представление (view) и instead of тригер. Таблица dbo.TestAutoIncrementInMem
+        - MI - in-memory таблица (identity) direct insert. Таблица dbo.TestAutoIncrementInMemIdentity
+        - MI2 - in-memory таблица (identity) insert use stored procedure. Таблица dbo.TestAutoIncrementInMemIdentity
     """);
 
     var inputParts = (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
@@ -85,8 +85,8 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
 
     Func<IInserter>? creator = inputParts[0].ToUpperInvariant() switch
     {
-        "B" => () => new BasicInserter(connectionString),
-        "O" => () => new OptimizeForSequentialIdInserter(connectionString),
+        "I" => () => new BasicInserter(connectionString, workerCount),
+        "I2" => () => new OptimizeForSequentialIdInserter(connectionString),
         "G" => () => new GuidIdInserter(connectionString),
         "G7" => () => new GuidIdInserterV7OnClient(connectionString),
         "G2" => () => new GuidIdInserterNewIdOnServer(connectionString),

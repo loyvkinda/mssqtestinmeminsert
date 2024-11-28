@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.SqlClient;
+using System.Threading;
 
 namespace FastInsertsConsole;
 
@@ -41,13 +42,13 @@ internal class IdFromSequenceInserter : IInserter
             end
 
             if object_id('dbo.TestAutoIncrementSeq') is null
-            create table [dbo].[TestAutoIncrementSeq](
-            [Id] [bigint]  NOT NULL,
-            [SomeData] [nvarchar](100) NOT NULL,
+            create table dbo.TestAutoIncrementSeq (
+            Id bigint not null,
+            SomeData nvarchar(100) not null,
             AppKey int not null,
+            ThreadId int not null,
             CreateAt datetime2 not null default(getutcdate()),
-            constraint [PK_TestAutoIncrementSeq] primary key clustered ([Id] ASC)
-            )
+            constraint PK_TestAutoIncrementSeq primary key clustered(Id asc));
             """;
         await createCommand.ExecuteNonQueryAsync();
     }
@@ -58,16 +59,17 @@ internal class IdFromSequenceInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into [dbo].[TestAutoIncrementSeq] (Id, SomeData, AppKey) VALUES (@Id, @SomeData, @AppKey)";
+            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementSeq (Id, SomeData, AppKey, ThreadId) VALUES (@Id, @SomeData, @AppKey, @ThreadId)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@Id", System.Data.SqlDbType.BigInt));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
-            _insertCommand.CommandTimeout = 300;
-        }
+            _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int)); 
+            _insertCommand.CommandTimeout = 300;        }
 
         _insertCommand.Parameters["@Id"].Value = await GetNextIdAsync();
         _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70);
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
+        _insertCommand.Parameters["@ThreadId"].Value = Environment.CurrentManagedThreadId; ; 
         await _insertCommand.ExecuteNonQueryAsync();
     }
 

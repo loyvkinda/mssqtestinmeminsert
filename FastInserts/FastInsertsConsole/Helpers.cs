@@ -10,7 +10,7 @@ internal class Helpers
     public static string GenerateRandomString(int fromLength, int toLength, string prefix="")
     {
         // максимально исключаем случайность 
-        return prefix + Environment.CurrentManagedThreadId.ToString() + " static const value";
+        return (string.IsNullOrEmpty(prefix)? string.Empty: prefix.TrimEnd()+" ") + "static const value";
         var length = Random.Shared.Next(fromLength, toLength);
         var sb = new StringBuilder(length);
         for (int i = 0; i < length; i++)
