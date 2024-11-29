@@ -1,5 +1,4 @@
 ﻿using Microsoft.Data.SqlClient;
-using System.Threading;
 
 namespace FastInsertsConsole;
 
@@ -11,10 +10,12 @@ internal class InMemoryTableInserterIdentityNativeSp : IInserter
 {
     private SqlConnection _sqlConnection;
     private SqlCommand? _insertCommand;
+    private int _workerCount = 0;
 
-    public InMemoryTableInserterIdentityNativeSp(string connectionString)
+    public InMemoryTableInserterIdentityNativeSp(string connectionString, int workerCount)
     {
         _sqlConnection = new SqlConnection(connectionString);
+        _workerCount = workerCount;
     }
 
     public async Task PrepareAsync()
@@ -65,12 +66,41 @@ internal class InMemoryTableInserterIdentityNativeSp : IInserter
             SomeData nvarchar(100) collate Cyrillic_General_CI_AS null,
             AppKey int not null,
             ThreadId int not null,
+            ThreadCount int not null,
             CreateAt datetime2(7) not null default(getutcdate()),
             constraint PK_TestAutoIncrementInMemIdentity primary key nonclustered(Id asc))
             with (memory_optimized=on, durability=schema_and_data);
             
             """;
         await createCommand.ExecuteNonQueryAsync();
+
+        await using var preСheckCommandSpExists = _sqlConnection.CreateCommand();
+        preСheckCommandSpExists.CommandText = """
+            declare @rc bit=0;
+            select @rc = (object_id('dbo.nativeTestAutoIncrementInMemIdentityInsertOne'));
+            select isnull(@rc, 0) as IsExists;
+            """;
+        resultCheck = (bool)await preСheckCommandSpExists.ExecuteScalarAsync();
+        if (!resultCheck)
+        {
+            await using var createCommandProc = _sqlConnection.CreateCommand();
+            createCommandProc.CommandText = """
+            create or alter procedure dbo.nativeTestAutoIncrementInMemIdentityInsertOne
+            (@somedata nvarchar(100), @AppKey int, @ThreadId int, @ThreadCount int)
+            	with native_compilation,
+            	     schemabinding,
+            	     execute as owner
+            as
+            begin atomic
+            	with (transaction isolation level = snapshot,
+            	      language = N'us_english')
+            	insert dbo.TestAutoIncrementInMemIdentity(SomeData, AppKey, ThreadId, ThreadCount) 
+                values (@somedata, @AppKey, @ThreadId, @ThreadCount);
+            end;                        
+            """;
+            await createCommandProc.ExecuteNonQueryAsync();
+        }
+            
     }
 
     public async Task InsertAsync()
@@ -83,13 +113,15 @@ internal class InMemoryTableInserterIdentityNativeSp : IInserter
             _insertCommand.CommandType = System.Data.CommandType.StoredProcedure;
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
-            _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int));            
+            _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int));
+            _insertCommand.Parameters.Add(new SqlParameter("@ThreadCount", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
         _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "spidentity");
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         _insertCommand.Parameters["@ThreadId"].Value = Environment.CurrentManagedThreadId;
+        _insertCommand.Parameters["@ThreadCount"].Value = _workerCount;
 
         await _insertCommand.ExecuteNonQueryAsync();
     }

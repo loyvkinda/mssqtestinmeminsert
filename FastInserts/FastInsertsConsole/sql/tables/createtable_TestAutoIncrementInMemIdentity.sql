@@ -4,6 +4,7 @@
     SomeData nvarchar(100) not null,
     AppKey int not null,
     ThreadId int not null,
+    ThreadCount int not null,
     CreateAt datetime2(7) not null default(getutcdate()),
     constraint PK_TestAutoIncrementInMemIdentity primary key nonclustered
     (Id asc))

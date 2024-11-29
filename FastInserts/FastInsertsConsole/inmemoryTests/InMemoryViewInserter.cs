@@ -7,11 +7,12 @@ internal class InMemoryViewInserter : IInserter
 {
     private SqlConnection _sqlConnection;
     private SqlCommand? _insertCommand;
+    private int _workerCount = 0;
 
-
-    public InMemoryViewInserter(string connectionString)
+    public InMemoryViewInserter(string connectionString, int workerCount)
     {
         _sqlConnection = new SqlConnection(connectionString);
+        _workerCount = workerCount;
     }
 
     public async Task PrepareAsync()
@@ -81,6 +82,7 @@ internal class InMemoryViewInserter : IInserter
             SomeData nvarchar(100) not null,
             AppKey int not null,
             ThreadId int not null,
+            ThreadCount int not null,
             CreateAt datetime2 not null default(getutcdate()),
                --CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY NONCLUSTERED (Id),
                 CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY nonclustered hash (id) with(bucket_count=1024)
@@ -95,7 +97,7 @@ internal class InMemoryViewInserter : IInserter
             exec dbo.sp_executesql @statement = N'create view [dbo].[TestAutoIncrementMemView]
             with schemabinding
             as
-            select id, SomeData, AppKey, ThreadId, CreateAt from dbo.TestAutoIncrementInMem with(snapshot);
+            select id, SomeData, AppKey, ThreadId, ThreadCount, CreateAt from dbo.TestAutoIncrementInMem with(snapshot);
             '
             """;
         await createViewCommand.ExecuteNonQueryAsync();
@@ -108,8 +110,8 @@ internal class InMemoryViewInserter : IInserter
             instead of insert
             as
             set nocount on;
-            insert into dbo.TestAutoIncrementInMem with(snapshot) (id, SomeData, AppKey, ThreadId)
-            select next value for dbo.TestSequenceInMem, SomeData, AppKey, ThreadId from INSERTED;
+            insert into dbo.TestAutoIncrementInMem with(snapshot) (id, SomeData, AppKey, ThreadId, ThreadCount)
+            select next value for dbo.TestSequenceInMem, SomeData, AppKey, ThreadId, ThreadCount from INSERTED;
             ' 
             """;
         await createViewTrigCommand.ExecuteNonQueryAsync();
@@ -121,16 +123,18 @@ internal class InMemoryViewInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementMemView (SomeData, AppKey, ThreadId) VALUES (@SomeData, @AppKey, @ThreadId)";
+            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementMemView (SomeData, AppKey, ThreadId, ThreadCount) VALUES (@SomeData, @AppKey, @ThreadId, @ThreadCount)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int));
+            _insertCommand.Parameters.Add(new SqlParameter("@ThreadCount", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
         _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "view");
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         _insertCommand.Parameters["@ThreadId"].Value = Environment.CurrentManagedThreadId;
+        _insertCommand.Parameters["@ThreadCount"].Value = _workerCount;
         await _insertCommand.ExecuteNonQueryAsync();
     }
 

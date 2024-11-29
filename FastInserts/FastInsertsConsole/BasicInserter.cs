@@ -26,13 +26,14 @@ internal class BasicInserter : IInserter
         await using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if object_id('dbo.TestAutoIncrementIdentity') is null
-            create table dbo.TestAutoIncrementIdentity (
-            Id bigint identity(1, 1) not null,
-            SomeData nvarchar(100) not null,
-            AppKey int not null,
-            ThreadId int not null,
-            CreateAt datetime2 not null default(getutcdate()),
-            constraint PK_TestAutoIncrementIdentity primary key clustered(Id asc));
+                create table dbo.TestAutoIncrementIdentity (
+                Id bigint identity(1, 1) not null,
+                SomeData nvarchar(100) not null,
+                AppKey int not null,
+                ThreadId int not null,
+                ThreadCount int not null,
+                CreateAt datetime2 default(getutcdate())
+                constraint PK_TestAutoIncrementIdentity primary key clustered(Id asc));
             """;
         await createCommand.ExecuteNonQueryAsync();
     }
@@ -43,17 +44,19 @@ internal class BasicInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementIdentity (SomeData, AppKey, ThreadId) VALUES (@SomeData, @AppKey, @ThreadId)";
+            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementIdentity (SomeData, AppKey, ThreadId, ThreadCount) VALUES (@SomeData, @AppKey, @ThreadId, @ThreadCount)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int));
+            _insertCommand.Parameters.Add(new SqlParameter("@ThreadCount", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
         _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70);
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         _insertCommand.Parameters["@ThreadId"].Value = Environment.CurrentManagedThreadId;
-        
+        _insertCommand.Parameters["@ThreadCount"].Value = _workerCount;
+
 
         await _insertCommand.ExecuteNonQueryAsync();
     }

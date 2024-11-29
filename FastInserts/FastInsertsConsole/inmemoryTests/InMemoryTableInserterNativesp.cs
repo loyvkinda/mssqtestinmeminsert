@@ -11,13 +11,15 @@ internal class InMemoryTableInserterNativesp : IInserter
     private const int _rangeSize = 2_000;
     private SqlConnection _sqlConnection;
     private SqlCommand? _insertCommand;
+    private int _workerCount = 0;
     private SqlCommand? _commandNextIdValue;
     private (long NextValue, long RemaningingCount)? _idSequence;
 
 
-    public InMemoryTableInserterNativesp(string connectionString)
+    public InMemoryTableInserterNativesp(string connectionString, int workerCount)
     {
         _sqlConnection = new SqlConnection(connectionString);
+        _workerCount = workerCount;
     }
 
     public async Task PrepareAsync()
@@ -59,14 +61,6 @@ internal class InMemoryTableInserterNativesp : IInserter
             cmdCreateFileGroup.ExecuteNonQuery();
         }
 
-        //await using var dropCommand = _sqlConnection.CreateCommand();
-        //dropCommand.CommandText = """
-        //    drop view if exists dbo.TestAutoIncrementMemView;
-        //    drop table if exists [dbo].[TestAutoIncrementInMem];
-        //    drop sequence if exists [dbo].[TestSequenceInMem];
-        //    """;
-        //await dropCommand.ExecuteScalarAsync();
-
         await using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if not exists (select * from sys.sequences where name = N'TestSequenceInMem' and schema_id = schema_id(N'dbo'))
@@ -87,6 +81,7 @@ internal class InMemoryTableInserterNativesp : IInserter
             SomeData nvarchar(100) not null,
             AppKey int not null,
             ThreadId int not null,
+            ThreadCount int not null,
             CreateAt datetime2 not null default(getutcdate()),
                --CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY NONCLUSTERED (Id),
                 CONSTRAINT PK_TestAutoIncrementInMem PRIMARY KEY nonclustered hash (id) with(bucket_count=1024)
@@ -95,6 +90,34 @@ internal class InMemoryTableInserterNativesp : IInserter
             
             """;
         await createCommand.ExecuteNonQueryAsync();
+
+        await using var preСheckCommandSpExists = _sqlConnection.CreateCommand();
+        preСheckCommandSpExists.CommandText = """
+            declare @rc bit=0;
+            select @rc = (object_id('dbo.nativeTestAutoIncrementInMemInsertOne'));
+            select isnull(@rc, 0) as IsExists;
+            """;
+        resultCheck = (bool)await preСheckCommandSpExists.ExecuteScalarAsync();
+        if (!resultCheck)
+        {
+            await using var createCommandProc = _sqlConnection.CreateCommand();
+            createCommandProc.CommandText = """
+            create   procedure dbo.nativeTestAutoIncrementInMemInsertOne
+            (@id bigint, @SomeData nvarchar(100), @AppKey int, @ThreadId int, @ThreadCount int)
+            	with native_compilation,
+            	     schemabinding,
+            	     execute as owner
+            as
+            begin atomic
+            	with (transaction isolation level = snapshot,
+            	      language = N'us_english')
+            	insert dbo.TestAutoIncrementInMem(Id, SomeData, AppKey, ThreadId, ThreadCount) 
+                values (@id, @SomeData, @AppKey, @ThreadId, @ThreadCount);
+            end;
+                       
+            """;
+            await createCommandProc.ExecuteNonQueryAsync();
+        }
     }
 
     public async Task InsertAsync()
@@ -109,6 +132,7 @@ internal class InMemoryTableInserterNativesp : IInserter
             _insertCommand.Parameters.Add(new SqlParameter("@Id", System.Data.SqlDbType.BigInt));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int));
+            _insertCommand.Parameters.Add(new SqlParameter("@ThreadCount", System.Data.SqlDbType.Int));
             _insertCommand.CommandTimeout = 300;
         }
 
@@ -116,6 +140,7 @@ internal class InMemoryTableInserterNativesp : IInserter
         _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "spsiqencecode");
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         _insertCommand.Parameters["@ThreadId"].Value = Environment.CurrentManagedThreadId;
+        _insertCommand.Parameters["@ThreadCount"].Value = _workerCount;
         await _insertCommand.ExecuteNonQueryAsync();
     }
 

@@ -1,7 +1,18 @@
 ﻿using FastInsertsConsole;
+using Microsoft.Extensions.Configuration;
 
-int targetInsertCount = 1_000_00;//2_000_000;
-string connectionString = "Server=localhost;Database=ForTests;Trusted_Connection=True;Encrypt=False;TrustServerCertificate=True; Max Pool Size=200;";
+var builder = new ConfigurationBuilder()
+                  .AddJsonFile($"appsettings.json", true, true);
+
+var config = builder.Build();
+
+int targetInsertCount = 500_000;
+if (config["targetInsertCount"] != null)
+    int.TryParse(config["targetInsertCount"], out targetInsertCount);
+// "Server=localhost;Database=ForTests;Trusted_Connection=True;Encrypt=False;TrustServerCertificate=True; Max Pool Size=200;";
+string connectionString = config["ConnectionString"]; 
+
+
 // фикскируем время старта, используется для группировки в таблицах
 Helpers.GetTimeMsSinceMidnight();
 
@@ -36,8 +47,8 @@ await Task.WhenAll(workers);
 var completedAt = DateTime.UtcNow;
 
 // Print summary
-Console.WriteLine($"""
-    Elapsed time in seconds: {(int)(completedAt - startedAt).TotalSeconds}
+Console.WriteLine($"""    
+    {settings.Value.SelectedVariant} {settings.Value.WorkerCount} Elapsed time in seconds: {(int)(completedAt - startedAt).TotalSeconds}
     Inserts per second: {targetInsertCount / (completedAt - startedAt).TotalSeconds}
     Inserts per second per thread: {targetInsertCount / (completedAt - startedAt).TotalSeconds / settings.Value.WorkerCount}
     """);
@@ -61,16 +72,16 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
     }
 }
 
-(int WorkerCount, Func<IInserter> Inserter)? AskForSettings(string connectionString)
+(int WorkerCount, string SelectedVariant,  Func<IInserter> Inserter)? AskForSettings(string connectionString)
 {
     Console.WriteLine("""
-    Выбираем inserter количество потоков (thread) ([1,256]), например: "I 8":
+    Выбираем inserter и количество потоков (thread) ([1,256]), например: "I 8":
         - I  - ид на основе Identity. Таблица dbo.TestAutoIncrementIdentity
         - I2 - ид на основе Identity + опция optimize_for_sequential_key=on. Таблица dbo.TestAutoIncrementIdentityOpt
         - G  - guid as id on client. Таблица dbo.TestAutoIncrementGuid
-        - G7 - guid сгенерированный на клиенте используя Guid.CreateVersion7. Таблица dbo.TestAutoIncrementGuidV7
         - G2 - guid сгенерированный на сервере newid(). Таблица dbo.TestAutoIncrementGuidNewId
         - G3 - guid сгенерированный на сервере newsequentialid(). Таблица dbo.TestAutoIncrementGuidNewSequentialid
+        - G7 - guid сгенерированный на клиенте используя Guid.CreateVersion7. Таблица dbo.TestAutoIncrementGuidV7
         - S  - использование sequence. Таблица dbo.TestAutoIncrementSeq
         - M  - in-memory таблица id из sequence. Таблица dbo.TestAutoIncrementInMem
         - M1 - in-memory таблица id из sequence использую native хранимую процедуру. Таблица dbo.TestAutoIncrementInMem
@@ -79,29 +90,30 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
         - MI2 - in-memory таблица (identity) insert use stored procedure. Таблица dbo.TestAutoIncrementInMemIdentity
     """);
 
-    var inputParts = (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
+    //var inputParts = (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
+    var inputParts = args.Length > 0 ? args : (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
     if (inputParts.Length != 2 || !int.TryParse(inputParts[1], out var workerCount) || workerCount <= 0 || workerCount > 256)
         return null;
-
+    var selectedVariant = inputParts[0];
     Func<IInserter>? creator = inputParts[0].ToUpperInvariant() switch
     {
         "I" => () => new BasicInserter(connectionString, workerCount),
-        "I2" => () => new OptimizeForSequentialIdInserter(connectionString),
-        "G" => () => new GuidIdInserter(connectionString),
-        "G7" => () => new GuidIdInserterV7OnClient(connectionString),
-        "G2" => () => new GuidIdInserterNewIdOnServer(connectionString),
-        "G3" => () => new GuidIdInserterNewSequentialidOnServer(connectionString),
-        "S" => () => new IdFromSequenceInserter(connectionString),
-        "M" => () => new InMemoryTableInserter(connectionString),
-        "M1" => () => new InMemoryTableInserterNativesp(connectionString),
-        "MV" => () => new InMemoryViewInserter(connectionString),
-        "MI" => () => new InMemoryTableInserterIdentity(connectionString),
-        "MI2" => () => new InMemoryTableInserterIdentityNativeSp(connectionString),
+        "I2" => () => new OptimizeForSequentialIdInserter(connectionString, workerCount),
+        "G" => () => new GuidIdInserter(connectionString, workerCount),
+        "G7" => () => new GuidIdInserterV7OnClient(connectionString, workerCount),
+        "G2" => () => new GuidIdInserterNewIdOnServer(connectionString, workerCount),
+        "G3" => () => new GuidIdInserterNewSequentialidOnServer(connectionString, workerCount),
+        "S" => () => new IdFromSequenceInserter(connectionString, workerCount),
+        "M" => () => new InMemoryTableInserter(connectionString, workerCount),
+        "M1" => () => new InMemoryTableInserterNativesp(connectionString, workerCount),
+        "MV" => () => new InMemoryViewInserter(connectionString, workerCount),
+        "MI" => () => new InMemoryTableInserterIdentity(connectionString, workerCount),
+        "MI2" => () => new InMemoryTableInserterIdentityNativeSp(connectionString, workerCount),
         _ => null
     };
     if (creator == null)
         return null;
-    return (workerCount, creator);
+    return (workerCount, selectedVariant, creator);
 }
 
 class RemainingCounter
