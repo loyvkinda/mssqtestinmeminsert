@@ -16,6 +16,27 @@ string connectionString = config["ConnectionString"];
 // фикскируем время старта, используется для группировки в таблицах
 Helpers.GetTimeMsSinceMidnight();
 
+if(! DbHelper.CanConnect(connectionString))
+{
+    Console.WriteLine("Нет соединения с сервером!!! Исправте строку подключения в файле appsettings.json");
+    return;
+}
+if(!DbHelper.IsSysadmin(connectionString))
+{
+    Console.WriteLine("Вы не сисадмин на сервере!!! Исправте строку подключения в файле appsettings.json");
+    return;
+}
+
+// общая информация о сервере
+var srvInfo = DbHelper.GetServerinfo(connectionString);
+Console.WriteLine("Информация о сервере и базе:");
+foreach (var item in srvInfo)
+{
+    Console.WriteLine($"{item.Key.ToUpper()}: {item.Value}");
+    
+}
+Console.WriteLine(string.Concat(Enumerable.Repeat("-", 50)));
+
 var settings = AskForSettings(connectionString);
 if (!settings.HasValue)
 {
@@ -82,15 +103,15 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
         - G2 - guid сгенерированный на сервере newid(). Таблица dbo.TestAutoIncrementGuidNewId
         - G3 - guid сгенерированный на сервере newsequentialid(). Таблица dbo.TestAutoIncrementGuidNewSequentialid
         - G7 - guid сгенерированный на клиенте используя Guid.CreateVersion7. Таблица dbo.TestAutoIncrementGuidV7
-        - S  - использование sequence. Таблица dbo.TestAutoIncrementSeq
-        - M  - in-memory таблица id из sequence. Таблица dbo.TestAutoIncrementInMem
-        - M1 - in-memory таблица id из sequence использую native хранимую процедуру. Таблица dbo.TestAutoIncrementInMem
-        - MV - in-memory таблица id из sequence втавка в представление (view) и instead of тригер. Таблица dbo.TestAutoIncrementInMem
+        - S  - использование sequence на основе диапазона (sp_sequence_get_range). Таблица dbo.TestAutoIncrementSeq
+        - S1 - использование sequence (next value for). Таблица dbo.TestAutoIncrementSeq
+        - M  - in-memory таблица id из sequence на основе диапазона (sp_sequence_get_range). Таблица dbo.TestAutoIncrementInMem
+        - M1 - in-memory таблица id из sequence на основе диапазона (sp_sequence_get_range) использую native хранимую процедуру. Таблица dbo.TestAutoIncrementInMem
+        - MV - in-memory таблица id из sequence (next value for) вcтавка в представление (view) и instead of тригер. Таблица dbo.TestAutoIncrementInMem
         - MI - in-memory таблица (identity) direct insert. Таблица dbo.TestAutoIncrementInMemIdentity
         - MI2 - in-memory таблица (identity) insert use stored procedure. Таблица dbo.TestAutoIncrementInMemIdentity
     """);
 
-    //var inputParts = (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
     var inputParts = args.Length > 0 ? args : (Console.ReadLine() ?? string.Empty).Trim().Split(' ');
     if (inputParts.Length != 2 || !int.TryParse(inputParts[1], out var workerCount) || workerCount <= 0 || workerCount > 256)
         return null;
@@ -104,6 +125,7 @@ async Task InsertAsync(Func<IInserter> inserterCreator, RemainingCounter counter
         "G2" => () => new GuidIdInserterNewIdOnServer(connectionString, workerCount),
         "G3" => () => new GuidIdInserterNewSequentialidOnServer(connectionString, workerCount),
         "S" => () => new IdFromSequenceInserter(connectionString, workerCount),
+        "S1" => () => new IdFromSequenceNextInserter(connectionString, workerCount),
         "M" => () => new InMemoryTableInserter(connectionString, workerCount),
         "M1" => () => new InMemoryTableInserterNativesp(connectionString, workerCount),
         "MV" => () => new InMemoryViewInserter(connectionString, workerCount),

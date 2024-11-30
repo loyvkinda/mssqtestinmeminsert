@@ -2,17 +2,14 @@
 
 namespace FastInsertsConsole;
 
-internal class IdFromSequenceInserter : IInserter
+internal class IdFromSequenceNextInserter : IInserter
 {
-    private const int _rangeSize = 2_000;
     private SqlConnection _sqlConnection;
     private SqlCommand? _insertCommand;
     private int _workerCount = 0;
-    private SqlCommand? _commandNextIdValue;
-    private (long NextValue, long RemaningingCount)? _idSequence;
 
 
-    public IdFromSequenceInserter(string connectionString, int workerCount)
+    public IdFromSequenceNextInserter(string connectionString, int workerCount)
     {
         _sqlConnection = new SqlConnection(connectionString);
         _workerCount = workerCount;
@@ -21,13 +18,6 @@ internal class IdFromSequenceInserter : IInserter
     public async Task PrepareAsync()
     {
         await EnsureConnectionOpenedAsync();
-
-        //await using var dropCommand = _sqlConnection.CreateCommand();
-        //dropCommand.CommandText = """
-        //    DROP TABLE IF EXISTS [dbo].[TestAutoIncrement]
-        //    DROP SEQUENCE IF EXISTS [dbo].[TestSequence]
-        //    """;
-        //await dropCommand.ExecuteNonQueryAsync();
 
         await using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
@@ -61,17 +51,15 @@ internal class IdFromSequenceInserter : IInserter
         if (_insertCommand == null)
         {
             _insertCommand = _sqlConnection.CreateCommand();
-            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementSeq (Id, SomeData, AppKey, ThreadId, ThreadCount) VALUES (@Id, @SomeData, @AppKey, @ThreadId, @ThreadCount)";
+            _insertCommand.CommandText = "set nocount on; insert into dbo.TestAutoIncrementSeq (SomeData, AppKey, ThreadId, ThreadCount) VALUES (@SomeData, @AppKey, @ThreadId, @ThreadCount)";
             _insertCommand.Parameters.Add(new SqlParameter("@SomeData", System.Data.SqlDbType.NVarChar));
-            _insertCommand.Parameters.Add(new SqlParameter("@Id", System.Data.SqlDbType.BigInt));
             _insertCommand.Parameters.Add(new SqlParameter("@AppKey", System.Data.SqlDbType.Int));
             _insertCommand.Parameters.Add(new SqlParameter("@ThreadId", System.Data.SqlDbType.Int));
             _insertCommand.Parameters.Add(new SqlParameter("@ThreadCount", System.Data.SqlDbType.Int));
-            _insertCommand.CommandTimeout = 300;        
+            _insertCommand.CommandTimeout = 300;
         }
 
-        _insertCommand.Parameters["@Id"].Value = await GetNextIdAsync();
-        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "siqencecode");
+        _insertCommand.Parameters["@SomeData"].Value = Helpers.GenerateRandomString(20, 70, "siqenceserver");
         _insertCommand.Parameters["@AppKey"].Value = Helpers.GetTimeMsSinceMidnight();
         _insertCommand.Parameters["@ThreadId"].Value = Environment.CurrentManagedThreadId;
         _insertCommand.Parameters["@ThreadCount"].Value = _workerCount;
@@ -83,35 +71,9 @@ internal class IdFromSequenceInserter : IInserter
         _sqlConnection.Dispose();
     }
 
-    private async Task<long> GetNextIdAsync()
-    {
-        if (_idSequence == null || _idSequence.Value.RemaningingCount == 0)
-        {
-            if (_commandNextIdValue == null)
-            {
-                _commandNextIdValue = new SqlCommand();
-                _commandNextIdValue.CommandText = @$"
-DECLARE @range_first_value_output sql_variant  ;  
- 
-EXEC sys.sp_sequence_get_range  
-@sequence_name = N'dbo.TestSequence'  
-, @range_size = {_rangeSize}  
-, @range_first_value = @range_first_value_output OUTPUT ;  
- 
-SELECT CONVERT(bigint, @range_first_value_output) AS FirstNumber; ";
-                _commandNextIdValue.Connection = _sqlConnection;
-            }
-            _idSequence = ((long)(await _commandNextIdValue.ExecuteScalarAsync())!, _rangeSize);
-        }
-        var toReturn = _idSequence!.Value.NextValue;
-        _idSequence = (toReturn + 1, _idSequence.Value.RemaningingCount - 1);
-        return toReturn;
-    }
-
     private async Task EnsureConnectionOpenedAsync()
     {
         if (_sqlConnection.State != System.Data.ConnectionState.Open)
             await _sqlConnection.OpenAsync();
     }
-
 }
