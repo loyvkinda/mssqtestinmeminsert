@@ -19,7 +19,7 @@ internal class IdFromSequenceNextInserter : IInserter
     {
         await EnsureConnectionOpenedAsync();
 
-        await using var createCommand = _sqlConnection.CreateCommand();
+        using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if not exists (select * from sys.sequences where name = N'TestSequence' and schema_id = schema_id(N'dbo'))
             begin

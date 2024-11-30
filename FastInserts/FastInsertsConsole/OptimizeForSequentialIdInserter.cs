@@ -18,11 +18,7 @@ internal class OptimizeForSequentialIdInserter : IInserter
     {
         await EnsureConnectionOpenedAsync();
 
-        //await using var dropCommand = _sqlConnection.CreateCommand();
-        //dropCommand.CommandText = "DROP TABLE IF EXISTS [dbo].[TestAutoIncrement]";
-        //await dropCommand.ExecuteNonQueryAsync();
-
-        await using var createCommand = _sqlConnection.CreateCommand();
+        using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if object_id('dbo.TestAutoIncrementIdentityOpt') is null
             create table dbo.TestAutoIncrementIdentityOpt (

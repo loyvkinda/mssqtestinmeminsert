@@ -22,14 +22,7 @@ internal class IdFromSequenceInserter : IInserter
     {
         await EnsureConnectionOpenedAsync();
 
-        //await using var dropCommand = _sqlConnection.CreateCommand();
-        //dropCommand.CommandText = """
-        //    DROP TABLE IF EXISTS [dbo].[TestAutoIncrement]
-        //    DROP SEQUENCE IF EXISTS [dbo].[TestSequence]
-        //    """;
-        //await dropCommand.ExecuteNonQueryAsync();
-
-        await using var createCommand = _sqlConnection.CreateCommand();
+        using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if not exists (select * from sys.sequences where name = N'TestSequence' and schema_id = schema_id(N'dbo'))
             begin

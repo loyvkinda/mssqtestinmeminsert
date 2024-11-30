@@ -19,7 +19,7 @@ internal class InMemoryTableInserterIdentity : IInserter
     {
         await EnsureConnectionOpenedAsync();
         // проверка наличия ImMemory группы в базе
-        await using var preСheckCommand = _sqlConnection.CreateCommand();
+        using var preСheckCommand = _sqlConnection.CreateCommand();
         preСheckCommand.CommandText = """
             declare @rc bit=0;
             select @rc = (select 1 from sys.filegroups where type='FX');

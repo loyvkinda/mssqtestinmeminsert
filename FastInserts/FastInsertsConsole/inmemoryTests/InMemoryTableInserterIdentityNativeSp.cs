@@ -22,7 +22,7 @@ internal class InMemoryTableInserterIdentityNativeSp : IInserter
     {
         await EnsureConnectionOpenedAsync();
         // проверка наличия ImMemory группы в базе
-        await using var preСheckCommand = _sqlConnection.CreateCommand();
+        using var preСheckCommand = _sqlConnection.CreateCommand();
         preСheckCommand.CommandText = """
             declare @rc bit=0;
             select @rc = (select 1 from sys.filegroups where type='FX');
@@ -58,7 +58,7 @@ internal class InMemoryTableInserterIdentityNativeSp : IInserter
         }
 
 
-        await using var createCommand = _sqlConnection.CreateCommand();
+        using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if object_id('dbo.TestAutoIncrementInMemIdentity') is null
             create table dbo.TestAutoIncrementInMemIdentity (

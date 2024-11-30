@@ -19,7 +19,7 @@ internal class GuidIdInserter : IInserter
     {
         await EnsureConnectionOpenedAsync();
 
-        await using var createCommand = _sqlConnection.CreateCommand();
+        using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if object_id('dbo.TestAutoIncrementGuid') is null
             create table dbo.TestAutoIncrementGuid (

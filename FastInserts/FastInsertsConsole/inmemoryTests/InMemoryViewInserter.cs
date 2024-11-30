@@ -19,7 +19,7 @@ internal class InMemoryViewInserter : IInserter
     {
         await EnsureConnectionOpenedAsync();
         // проверка наличия ImMemory группы в базе
-        await using var preСheckCommand = _sqlConnection.CreateCommand();
+        using var preСheckCommand = _sqlConnection.CreateCommand();
         preСheckCommand.CommandText = """
             declare @rc bit=0;
             select @rc = (select 1 from sys.filegroups where type='FX');
@@ -62,7 +62,7 @@ internal class InMemoryViewInserter : IInserter
         //    """;
         //await dropCommand.ExecuteScalarAsync();
 
-        await using var createCommand = _sqlConnection.CreateCommand();
+        using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if not exists (select * from sys.sequences where name = N'TestSequenceInMem' and schema_id = schema_id(N'dbo'))
             begin

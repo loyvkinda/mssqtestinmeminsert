@@ -19,11 +19,7 @@ internal class GuidIdInserterNewIdOnServer : IInserter
     {
         await EnsureConnectionOpenedAsync();
 
-        //await using var dropCommand = _sqlConnection.CreateCommand();
-        //dropCommand.CommandText = "DROP TABLE IF EXISTS [dbo].[TestAutoIncrementGuidNewId]";
-        //await dropCommand.ExecuteNonQueryAsync();
-
-        await using var createCommand = _sqlConnection.CreateCommand();
+        using var createCommand = _sqlConnection.CreateCommand();
         createCommand.CommandText = """
             if object_id('dbo.TestAutoIncrementGuidNewId') is null 
             begin
