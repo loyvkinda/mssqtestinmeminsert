@@ -95,3 +95,16 @@ create table dbo.TestAutoIncrementIdentity (
 `ThreadCount` - количество потоков выбранное при тектировании
 
 `CreateAt` - дата создания записи
+
+## Диагностика и устранение конфликтов кратковременных блокировок
+
+Документация от MS (
+[ангийский]([https://learn.microsoft.com/ru-ru/sql/relational-databases/diagnose-resolve-latch-contention?view=sql-server-ver16)
+[русский](https://learn.microsoft.com/en-us/sql/relational-databases/diagnose-resolve-latch-contention?view=sql-server-ver16)
+)
+
+Настрраиваем ExtEvent из файла `extEventMonitordevContention.sql` указав там правильный ид базы.
+
+И проводим анализ mode=SH и mode=EX
+
+
