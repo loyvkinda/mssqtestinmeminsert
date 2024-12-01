@@ -106,5 +106,3 @@ create table dbo.TestAutoIncrementIdentity (
 Настрраиваем ExtEvent из файла `extEventMonitordevContention.sql` указав там правильный ид базы.
 
 И проводим анализ mode=SH и mode=EX
-
-
