@@ -1,8 +1,14 @@
-﻿select name, value_in_use as value
+﻿select 'SERVERNAME' as name, @@SERVERNAME as value
+union all
+select name, cast(value_in_use as nvarchar(15)) as value
+from sys.configurations
+where name='max server memory (MB)'
+union all
+select name, cast(value_in_use as nvarchar(15)) as value
 from sys.configurations
 where description LIKE '%max%%parallelism%'
 union all
-select name, value 
+select name, cast(value as nvarchar(15)) 
 from sys.database_scoped_configurations
 where name in ('MAXDOP', 'IDENTITY_CACHE')
 union all
@@ -19,4 +25,3 @@ union all
 select 'is_read_committed_snapshot_on', 
     cast(is_read_committed_snapshot_on as nvarchar(2))
 from sys.databases where database_id=db_id()
-
